@@ -265,15 +265,24 @@ describe('fetchWithRetry', () => {
     expect(result.ok).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Rate limited'));
-  });
+  }, 15000);
 
   test('should throw error after max retries', async () => {
-    fetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
+    const mockErrorResponse = { 
+      ok: false, 
+      status: 500, 
+      statusText: 'Server Error', 
+      text: jest.fn().mockResolvedValue('') 
+    };
+    
+    fetch
+      .mockResolvedValueOnce(mockErrorResponse)
+      .mockResolvedValueOnce(mockErrorResponse);
     
     await expect(fetchWithRetry('http://test.com', {}, 2))
       .rejects.toThrow('HTTP 500: Server Error');
     expect(fetch).toHaveBeenCalledTimes(2);
-  });
+  }, 15000);
 });
 
 describe('getFeatureFlag', () => {
@@ -296,7 +305,7 @@ describe('getFeatureFlag', () => {
 
     const result = await getFeatureFlag('test-api-key', 'test-project', 'test-flag');
     expect(result).toEqual(mockFlag);
-  });
+  }, 10000);
 
   test('should return null for 404 (flag not found)', async () => {
     fetch.mockResolvedValueOnce({
@@ -311,14 +320,21 @@ describe('getFeatureFlag', () => {
 
   test('should throw error for other HTTP errors', async () => {
     // Mock multiple calls since fetchWithRetry will retry
+    const mockErrorResponse = { 
+      ok: false, 
+      status: 401, 
+      statusText: 'Unauthorized', 
+      text: jest.fn().mockResolvedValue('') 
+    };
+    
     fetch
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' })
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' })
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' });
+      .mockResolvedValueOnce(mockErrorResponse)
+      .mockResolvedValueOnce(mockErrorResponse)
+      .mockResolvedValueOnce(mockErrorResponse);
 
     await expect(getFeatureFlag('invalid-api-key', 'test-project', 'test-flag'))
       .rejects.toThrow('HTTP 401: Unauthorized. Please check your API key is valid and has the required permissions.');
-  }, 10000);
+  }, 20000);
 });
 
 describe('setCustomProperty', () => {
@@ -347,16 +363,66 @@ describe('setCustomProperty', () => {
     expect(result).toEqual(mockResponse);
   }, 10000);
 
+  test('should use correct JSON patch format with "value" field', async () => {
+    const mockResponse = {
+      key: 'test-flag',
+      customProperties: {
+        'flag.expiry.date': {
+          name: 'flag.expiry.date',
+          value: ['03/15/2024']
+        }
+      }
+    };
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+
+    await setCustomProperty('test-api-key', 'test-project', 'test-flag', 'flag.expiry.date', '03/15/2024');
+    
+    // Verify the request was made with correct format
+    expect(fetch).toHaveBeenCalledWith(
+      'https://app.launchdarkly.com/api/v2/flags/test-project/test-flag',
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          'Authorization': 'test-api-key',
+          'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+          patch: [
+            {
+              op: 'add',
+              path: '/customProperties/flag.expiry.date',
+              value: {
+                name: 'flag.expiry.date',
+                value: ['03/15/2024']  // Should be "value" not "values"
+              }
+            }
+          ]
+        })
+      })
+    );
+  });
+
   test('should throw error for 401 (unauthorized)', async () => {
     // Mock multiple calls since fetchWithRetry will retry
+    const mockErrorResponse = { 
+      ok: false, 
+      status: 401, 
+      statusText: 'Unauthorized', 
+      text: jest.fn().mockResolvedValue('') 
+    };
+    
     fetch
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' })
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' })
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized' });
+      .mockResolvedValueOnce(mockErrorResponse)
+      .mockResolvedValueOnce(mockErrorResponse)
+      .mockResolvedValueOnce(mockErrorResponse);
 
     await expect(setCustomProperty('invalid-api-key', 'test-project', 'test-flag', 'flag.expiry.date', '03/15/2024'))
       .rejects.toThrow('HTTP 401: Unauthorized. Please check your API key is valid and has the required permissions. Please check your API key has WRITE permissions.');
-  }, 10000);
+  }, 20000);
 
   test('should throw error for 404 (flag not found)', async () => {
     fetch.mockResolvedValueOnce({

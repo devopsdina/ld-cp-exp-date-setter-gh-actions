@@ -346,8 +346,6 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
   };
 
   core.info(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey} (operation: ${operation})`);
-  core.info(`Request URL: ${url}`);
-  core.info(`Request body: ${JSON.stringify(patchData)}`);
   
   try {
     const response = await fetchWithRetry(url, {
@@ -360,7 +358,6 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
     });
 
     const responseData = await response.json();
-    core.info(`API Response: ${JSON.stringify(responseData)}`);
     return responseData;
   } catch (error) {
     // Safely extract error message

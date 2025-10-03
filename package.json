@@ -1,0 +1,36 @@
+{
+  "name": "ld-cp-exp-date-setter-gh-actions",
+  "version": "1.0.0",
+  "description": "GitHub Action to set expiry date custom properties on LaunchDarkly feature flags",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "build": "ncc build index.js -o dist"
+  },
+  "keywords": [
+    "github-action",
+    "launchdarkly",
+    "feature-flags",
+    "expiry",
+    "custom-properties",
+    "setter"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vercel/ncc": "^0.38.1",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

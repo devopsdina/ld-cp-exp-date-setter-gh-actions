@@ -1,0 +1,130 @@
+name: Test Action
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run linter
+        run: npm run lint
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Validate build
+        run: npm run build
+
+  # Integration test for programmatic expiry date setting
+  integration-test-programmatic:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test programmatic expiry setting (30 days)
+        id: set-expiry-30days
+        uses: ./
+        with:
+          launchdarkly_api_key: ${{ secrets.LAUNCHDARKLY_API_KEY }}
+          project_key: ${{ vars.TEST_PROJECT_KEY || 'test-project' }}
+          days_from_creation: '30'
+          date_format: 'MM/DD/YYYY'
+          custom_property_name: 'flag.expiry.date'
+          skip_existing: 'true'
+      
+      - name: Display programmatic results
+        env:
+          UPDATED_FLAGS: ${{ steps.set-expiry-30days.outputs.updated_flags }}
+          FAILED_FLAGS: ${{ steps.set-expiry-30days.outputs.failed_flags }}
+          SKIPPED_FLAGS: ${{ steps.set-expiry-30days.outputs.skipped_flags }}
+        run: |
+          echo "Programmatic Test Results (30 days from creation):"
+          echo "Total flags found: ${{ steps.set-expiry-30days.outputs.total_found }}"
+          echo "Total flags processed: ${{ steps.set-expiry-30days.outputs.total_processed }}"
+          echo "Successfully updated: $(echo "$UPDATED_FLAGS" | jq -r 'length')"
+          echo "Failed to update: $(echo "$FAILED_FLAGS" | jq -r 'length')"
+          echo "Skipped flags: $(echo "$SKIPPED_FLAGS" | jq -r 'length')"
+          
+          if [ "$(echo "$UPDATED_FLAGS" | jq -r 'length')" -gt 0 ]; then
+            echo "Updated flags:"
+            echo "$UPDATED_FLAGS" | jq -r '.[] | "  - \(.key) (\(.name)): \(.calculatedExpiryDate)"'
+          fi
+
+  # Integration test with different date format
+  integration-test-date-format:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test with YYYY-MM-DD format (90 days)
+        id: set-expiry-90days
+        uses: ./
+        with:
+          launchdarkly_api_key: ${{ secrets.LAUNCHDARKLY_API_KEY }}
+          project_key: ${{ vars.TEST_PROJECT_KEY || 'test-project' }}
+          days_from_creation: '90'
+          date_format: 'YYYY-MM-DD'
+          custom_property_name: 'test.expiry.90days'
+          skip_existing: 'false'
+      
+      - name: Display date format results
+        env:
+          UPDATED_FLAGS: ${{ steps.set-expiry-90days.outputs.updated_flags }}
+          FAILED_FLAGS: ${{ steps.set-expiry-90days.outputs.failed_flags }}
+        run: |
+          echo "Date Format Test Results (90 days, YYYY-MM-DD):"
+          echo "Total flags found: ${{ steps.set-expiry-90days.outputs.total_found }}"
+          echo "Total flags processed: ${{ steps.set-expiry-90days.outputs.total_processed }}"
+          echo "Successfully updated: $(echo "$UPDATED_FLAGS" | jq -r 'length')"
+          echo "Failed to update: $(echo "$FAILED_FLAGS" | jq -r 'length')"
+
+  # Integration test with skip_existing=false
+  integration-test-no-skip:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test with skip_existing=false (60 days)
+        id: set-expiry-no-skip
+        uses: ./
+        with:
+          launchdarkly_api_key: ${{ secrets.LAUNCHDARKLY_API_KEY }}
+          project_key: ${{ vars.TEST_PROJECT_KEY || 'test-project' }}
+          days_from_creation: '60'
+          date_format: 'MM-DD-YYYY'
+          custom_property_name: 'test.expiry.60days'
+          skip_existing: 'false'
+      
+      - name: Display no-skip results
+        env:
+          UPDATED_FLAGS: ${{ steps.set-expiry-no-skip.outputs.updated_flags }}
+          SKIPPED_FLAGS: ${{ steps.set-expiry-no-skip.outputs.skipped_flags }}
+        run: |
+          echo "No-Skip Test Results (60 days, MM-DD-YYYY):"
+          echo "Total flags found: ${{ steps.set-expiry-no-skip.outputs.total_found }}"
+          echo "Total flags processed: ${{ steps.set-expiry-no-skip.outputs.total_processed }}"
+          echo "Successfully updated: $(echo "$UPDATED_FLAGS" | jq -r 'length')"
+          echo "Skipped flags: $(echo "$SKIPPED_FLAGS" | jq -r 'length')"

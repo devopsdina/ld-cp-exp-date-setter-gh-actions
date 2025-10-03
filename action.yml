@@ -1,0 +1,49 @@
+name: 'LaunchDarkly Flag Expiry Setter'
+description: 'Set expiration date custom properties on LaunchDarkly feature flags'
+author: 'LaunchDarkly'
+
+inputs:
+  launchdarkly_api_key:
+    description: 'LaunchDarkly API access token (requires WRITE permission for setting custom properties)'
+    required: true
+  project_key:
+    description: 'LaunchDarkly project key'
+    required: true
+  days_from_creation:
+    description: 'Number of days from flag creation date to set expiry (default: 30)'
+    required: false
+    default: '30'
+  custom_property_name:
+    description: 'Name of the custom property to set (default: flag.expiry.date)'
+    required: false
+    default: 'flag.expiry.date'
+  date_format:
+    description: 'Date format for the expiry date (MM/DD/YYYY, MM-DD-YYYY, YYYY-MM-DD, YYYY/MM/DD)'
+    required: false
+    default: 'MM/DD/YYYY'
+  skip_existing:
+    description: 'Skip flags that already have the expiry property set (default: true)'
+    required: false
+    default: 'true'
+
+outputs:
+  updated_flags:
+    description: 'JSON array of flags that were successfully updated'
+  failed_flags:
+    description: 'JSON array of flags that failed to update'
+  skipped_flags:
+    description: 'JSON array of flags that were skipped'
+  total_processed:
+    description: 'Total number of flags processed'
+  total_found:
+    description: 'Total number of flags found in the project'
+  total_skipped:
+    description: 'Total number of flags skipped'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+
+branding:
+  icon: 'calendar'
+  color: 'blue'

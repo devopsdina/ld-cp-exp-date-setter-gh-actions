@@ -3,7 +3,7 @@ const core = require('@actions/core');
 // Rate limiting and retry constants
 const RATE_LIMIT_DELAY = 3000; // milliseconds between requests (increased to 3s to avoid rate limiting)
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 second base delay for retries
+const RETRY_DELAY = 5000; // 5 second base delay for retries
 
 /**
  * Sleep utility function
@@ -331,7 +331,7 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
   const operation = hasExistingProperty ? 'replace' : 'add';
   
   // Prepare the JSON patch operation to set the custom property
-  // Using standard JSON patch format with correct "values" field
+  // Using standard JSON patch format with correct "value" field
   const patchData = {
     patch: [
       {
@@ -339,15 +339,15 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
         path: `/customProperties/${propertyName}`,
         value: {
           name: propertyName,
-          values: [propertyValue]  // Note: "values" not "value"
+          value: [propertyValue]  // Note: "value" not "values" for JSON Patch format
         }
       }
     ]
   };
 
-  core.debug(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey} (operation: ${operation})`);
-  core.debug(`Request URL: ${url}`);
-  core.debug(`Request body: ${JSON.stringify(patchData)}`);
+  core.info(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey} (operation: ${operation})`);
+  core.info(`Request URL: ${url}`);
+  core.info(`Request body: ${JSON.stringify(patchData)}`);
   
   try {
     const response = await fetchWithRetry(url, {
@@ -359,7 +359,9 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
       body: JSON.stringify(patchData)
     });
 
-    return await response.json();
+    const responseData = await response.json();
+    core.info(`API Response: ${JSON.stringify(responseData)}`);
+    return responseData;
   } catch (error) {
     // Safely extract error message
     let errorMessage;

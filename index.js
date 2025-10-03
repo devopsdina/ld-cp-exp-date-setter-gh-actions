@@ -1,11 +1,11 @@
 const core = require('@actions/core');
 
 // Rate limiting and retry constants
-const RATE_LIMIT_DELAY = 100; // milliseconds between requests
+const RATE_LIMIT_DELAY = 500; // milliseconds between requests (increased from 100ms)
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second base delay for retries
-const BATCH_SIZE = 10; // Process 10 flags at a time
-const BATCH_DELAY = 500; // 500ms delay between batches
+const RETRY_DELAY = 2000; // 2 second base delay for retries (increased from 1s)
+const BATCH_SIZE = 5; // Process 5 flags at a time (reduced from 10)
+const BATCH_DELAY = 2000; // 2 second delay between batches (increased from 500ms)
 
 /**
  * Sleep utility function
@@ -506,12 +506,24 @@ async function processFlagsInBatches(flagsToProcess, apiKey, projectKey, customP
         results.updatedFlags.push(result.value);
         core.info(`  ✅ ${flag.key}: ${result.value.calculatedExpiryDate}`);
       } else {
+        // Better error handling - extract message safely
+        let errorMessage;
+        if (result.reason instanceof Error) {
+          errorMessage = result.reason.message;
+        } else if (typeof result.reason === 'string') {
+          errorMessage = result.reason;
+        } else if (result.reason && result.reason.message) {
+          errorMessage = result.reason.message;
+        } else {
+          errorMessage = 'Unknown error occurred';
+        }
+        
         results.failedFlags.push({
           key: flag.key,
           name: flag.name,
-          error: result.reason.message || result.reason
+          error: errorMessage
         });
-        core.error(`  ❌ ${flag.key}: ${result.reason.message || result.reason}`);
+        core.error(`  ❌ ${flag.key}: ${errorMessage}`);
       }
     });
     

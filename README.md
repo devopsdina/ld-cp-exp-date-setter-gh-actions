@@ -1,32 +1,47 @@
-# LaunchDarkly Flag Expiry Setter Action
+# LaunchDarkly Flag Expiry Setter
 
-A GitHub Action that automatically sets expiry date custom properties on LaunchDarkly feature flags based on their creation dates. This action helps teams proactively manage feature flag lifecycle at enterprise scale by automatically calculating and setting expiration dates.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+A  GitHub Action that  manages LaunchDarkly feature flag custom properties by setting an expiry date based on flag creation timestamps.
 
-- 🚀 **Fully Automated**: Processes all flags in a project automatically - no manual flag selection needed
-- 📅 **Creation Date Based**: Calculates expiry dates from actual flag creation timestamps
-- 🔄 **Enterprise Scale**: Handles thousands of flags with proper pagination and rate limiting
-- 📊 **Smart Filtering**: Skips flags that already have expiry dates (configurable)
-- 🎯 **Flexible Date Formats**: Supports MM/DD/YYYY, YYYY-MM-DD, MM-DD-YYYY, YYYY/MM/DD
-- 🛡️ **Rate Limit Handling**: Built-in 429 retry logic with exponential backoff
-- ⚡ **Batch Processing**: Processes flags in batches to avoid API overwhelm
-- 📋 **Comprehensive Reporting**: Detailed summaries of processed, skipped, and failed flags
-- 🔧 **Configurable**: Customizable expiry periods, property names, and date formats
+> **⚠️ Disclaimer**: This is not an officially supported LaunchDarkly solution. Use at your own discretion.
 
-## How It Works
+## Configuration
 
-1. **Fetches all flags** in the specified LaunchDarkly project (with pagination)
-2. **Filters flags** that need expiry dates (skips existing if configured)
-3. **Calculates expiry dates** by adding specified days to each flag's creation date
-4. **Sets custom properties** in batches with rate limiting
-5. **Reports results** with comprehensive success/failure breakdown
+### Input Parameters
 
-## Usage
+| Parameter | Description | Required | Default | Example |
+|-----------|-------------|----------|---------|---------|
+| `launchdarkly_api_key` | LaunchDarkly API access token (requires WRITE permission) | ✅ | - | `${{ secrets.LAUNCHDARKLY_API_KEY }}` |
+| `project_key` | LaunchDarkly project key | ✅ | - | `my-project` |
+| `days_from_creation` | Number of days from flag creation date to set expiry | ❌ | `30` | `90` |
+| `custom_property_name` | Name of the custom property to set | ❌ | `flag.expiry.date` | `lifecycle.expiry.date` |
+| `date_format` | Date format for the expiry date | ❌ | `MM/DD/YYYY` | `YYYY-MM-DD` |
+| `skip_existing` | Skip flags that already have the expiry property set | ❌ | `true` | `false` |
 
-This is not an officially supported solution. Use at your own risk.
+### Supported Date Formats
 
-### Basic Example - Set 30-day Expiry on All Flags
+| Format | Example | Description |
+|--------|---------|-------------|
+| `MM/DD/YYYY` | `03/15/2024` | US format (default) |
+| `MM-DD-YYYY` | `03-15-2024` | US format with dashes |
+| `YYYY-MM-DD` | `2024-03-15` | ISO 8601 format |
+| `YYYY/MM/DD` | `2024/03/15` | International format |
+
+### Output Parameters
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `updated_flags` | JSON Array | Flags that were successfully updated with expiry dates |
+| `failed_flags` | JSON Array | Flags that failed to update with error details |
+| `skipped_flags` | JSON Array | Flags that were skipped with reasons |
+| `total_processed` | Number | Total number of flags that were processed |
+| `total_found` | Number | Total number of flags found in the project |
+| `total_skipped` | Number | Total number of flags that were skipped |
+
+## Quick Start
+
+### Basic Usage
 
 ```yaml
 name: Set Flag Expiry Dates
@@ -49,7 +64,7 @@ jobs:
           days_from_creation: '30'
 ```
 
-### Advanced Example - Custom Configuration
+### Advanced Configuration
 
 ```yaml
 name: Flag Lifecycle Management
@@ -117,40 +132,12 @@ jobs:
           project_key: 'your-project'
           days_ahead: '7'
           create_issues: 'true'
-```
 
-## Inputs
+## Output Examples
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `launchdarkly_api_key` | LaunchDarkly API access token (requires WRITE permission) | Yes | |
-| `project_key` | LaunchDarkly project key | Yes | |
-| `days_from_creation` | Number of days from flag creation date to set expiry | No | `30` |
-| `custom_property_name` | Name of the custom property to set | No | `flag.expiry.date` |
-| `date_format` | Date format for the expiry date | No | `MM/DD/YYYY` |
-| `skip_existing` | Skip flags that already have the expiry property set | No | `true` |
+<details>
+<summary><strong>Successfully Updated Flags</strong></summary>
 
-### Date Format Options
-
-- `MM/DD/YYYY` (e.g., `03/15/2024`) - **Default**
-- `MM-DD-YYYY` (e.g., `03-15-2024`)
-- `YYYY-MM-DD` (e.g., `2024-03-15`)
-- `YYYY/MM/DD` (e.g., `2024/03/15`)
-
-## Outputs
-
-| Output | Description |
-|--------|-------------|
-| `updated_flags` | JSON array of flags that were successfully updated |
-| `failed_flags` | JSON array of flags that failed to update |
-| `skipped_flags` | JSON array of flags that were skipped |
-| `total_processed` | Total number of flags processed |
-| `total_found` | Total number of flags found in the project |
-| `total_skipped` | Total number of flags skipped |
-
-### Output Format Examples
-
-#### Successfully Updated Flags
 ```json
 [
   {
@@ -163,8 +150,11 @@ jobs:
   }
 ]
 ```
+</details>
 
-#### Skipped Flags
+<details>
+<summary><strong>Skipped Flags</strong></summary>
+
 ```json
 [
   {
@@ -175,49 +165,28 @@ jobs:
   }
 ]
 ```
+</details>
 
-## API Requirements
+## Prerequisites
 
-### LaunchDarkly API Token
+### LaunchDarkly API Token Setup
 
-This action requires a LaunchDarkly API access token with **WRITE permissions** for feature flags.
+> **🔐 Security Note**: This action requires write access to your LaunchDarkly feature flags.
 
-To create an API token:
+**Required Permissions:**
+- ✅ Write access to feature flags in the target project
+- ✅ Permission to modify custom properties
 
-1. Go to **Account settings** > **Authorization** in LaunchDarkly
-2. Click **Create token**
-3. Provide a name for your token
-4. Select a role with write permissions (Writer or Admin)
-5. Choose the projects you want to modify
-6. Save the token as a GitHub secret (e.g., `LAUNCHDARKLY_API_KEY`)
+**Setup Instructions:**
+1. Navigate to **Account Settings** → **Authorization** in LaunchDarkly
+2. Click **Create Token**
+3. Configure the token:
+   - **Name**: `GitHub Actions Flag Expiry Setter`
+   - **Role**: Writer or Admin
+   - **Projects**: Select target projects
+4. Copy the token and add it to GitHub Secrets as `LAUNCHDARKLY_API_KEY`
 
-### Required Permissions
-
-The API token needs:
-- **Write access** to feature flags in the specified project
-- Permission to modify custom properties
-
-## Enterprise Features
-
-### Automatic Pagination
-- Handles projects with thousands of flags
-- Processes all flags automatically with proper API pagination
-- Progress tracking for large datasets
-
-### Rate Limiting & Retry Logic
-- Built-in 429 (rate limit) handling with exponential backoff
-- Configurable delays between API requests
-- Automatic retry on transient failures
-
-### Batch Processing
-- Processes flags in configurable batches (default: 10 flags per batch)
-- Parallel processing within batches, sequential between batches
-- Prevents API overwhelm while maintaining efficiency
-
-### Intelligent Filtering
-- Automatically skips flags with invalid/missing creation dates
-- Configurable skip logic for flags with existing expiry properties
-- Detailed reporting of why flags were skipped
+> **⚠️ Important**: Store the API token securely in GitHub Secrets. Never commit it to your repository.
 
 ## Common Use Cases
 
@@ -276,95 +245,32 @@ Ensure all flags have expiry dates for audit purposes:
     days_from_creation: '180'
 ```
 
-## Error Handling
-
-The action includes comprehensive error handling for:
-
-- **Invalid API credentials** - Clear guidance on token requirements
-- **Missing flags** - Graceful handling of flags without creation dates
-- **Permission errors** - Specific messaging about write permissions
-- **Network connectivity issues** - Automatic retry with exponential backoff
-- **Rate limiting** - Built-in 429 handling per LaunchDarkly's guidelines
-- **API failures** - Detailed error reporting with context
-
-## Performance & Scale
-
-### Tested At Scale
-- ✅ **1000+ flags** - Handles large enterprise projects
-- ✅ **Rate limiting** - Respects LaunchDarkly API limits
-- ✅ **Memory efficient** - Processes flags in batches
-- ✅ **Progress tracking** - Real-time updates for long-running operations
-
-### Typical Performance
-- **Small projects** (< 50 flags): ~30 seconds
-- **Medium projects** (50-500 flags): 2-5 minutes
-- **Large projects** (500+ flags): 5-15 minutes
-
-Performance depends on:
-- Number of flags in project
-- API response times
-- Rate limiting encounters
-- Batch size configuration
-
 ## Troubleshooting
 
-### Common Issues
+### Common Issues & Solutions
 
-1. **"Please check your API key has WRITE permissions"**
-   - Ensure your API token has write access to feature flags
-   - Verify the token hasn't expired
-
-2. **"Invalid creation date for flag"**
-   - Some flags may have missing or invalid creation dates
-   - These flags are automatically skipped with detailed reporting
-
-3. **Rate limiting errors**
-   - The action handles rate limiting automatically
-   - For very large projects, the action may take longer but will complete
-
-4. **"No flags to process"**
-   - All flags already have expiry dates (when `skip_existing: true`)
-   - Check the skipped flags output for details
-
-### Debug Mode
-
-Enable debug logging by setting the `ACTIONS_STEP_DEBUG` secret to `true` in your repository.
-
-## Integration with Other Tools
-
-### LaunchDarkly Flag Expiry Audit Action
-Perfect companion for complete flag lifecycle management:
-```yaml
-# Set expiry dates
-- uses: your-org/launchdarkly-flag-expiry-setter@v1
-  # ... configuration ...
-
-# Audit expiring flags
-- uses: devopsdina/ld-cp-exp-date-gh-actions-audit@v1
-  # ... configuration ...
-```
-
-### Slack Notifications
-Combine with Slack actions for team notifications:
-```yaml
-- name: Notify team of flag updates
-  uses: 8398a7/action-slack@v3
-  with:
-    status: custom
-    custom_payload: |
-      {
-        text: "Updated expiry dates on ${{ steps.set-expiry.outputs.total_processed }} flags"
-      }
-```
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| **"API key has no WRITE permissions"** | Insufficient token permissions | Ensure API 
+| **Rate limiting errors** | Too many API requests | Built-in handling with exponential backoff |
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see our [contribution guidelines](CONTRIBUTING.md) for details.
+
+### Development Setup
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `npm test`
+5. Submit a pull request
+
+## Related Projects
+
+| Project | Description | Link |
+|---------|-------------|------|
+| **Flag Expiry Audit** | Audit flags for expiring dates | [GitHub](https://github.com/devopsdina/ld-cp-exp-date-gh-actions-audit) |
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Related Actions
-
-- [LaunchDarkly Flag Expiry Audit](https://github.com/devopsdina/ld-cp-exp-date-gh-actions-audit) - Audit flags for expiring dates

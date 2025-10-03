@@ -464,7 +464,18 @@ async function processSingleFlag(flag, apiKey, projectKey, customPropertyName, d
       customPropertyName: customPropertyName
     };
   } catch (error) {
-    throw new Error(`Failed to process flag ${flag.key}: ${error.message}`);
+    // Safely extract error message
+    let errorMessage;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && error.message) {
+      errorMessage = error.message;
+    } else {
+      errorMessage = 'Unknown error occurred';
+    }
+    throw new Error(`Failed to process flag ${flag.key}: ${errorMessage}`);
   }
 }
 

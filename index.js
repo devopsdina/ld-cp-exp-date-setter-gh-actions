@@ -35,11 +35,24 @@ async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         
+        // Try to get more details from the response body
+        try {
+          const errorBody = await response.text();
+          if (errorBody) {
+            core.debug(`API Error Response Body: ${errorBody}`);
+            errorMessage += `. Response: ${errorBody}`;
+          }
+        } catch (bodyError) {
+          core.debug(`Could not read error response body: ${bodyError.message}`);
+        }
+        
         // Add specific guidance for common errors
         if (response.status === 401) {
           errorMessage += '. Please check your API key is valid and has the required permissions.';
         } else if (response.status === 404) {
           errorMessage += '. Resource may not exist or you don\'t have access to it.';
+        } else if (response.status === 400) {
+          errorMessage += '. Check the request format and parameters.';
         }
         
         throw new Error(errorMessage);
@@ -109,7 +122,7 @@ async function run() {
     core.info(`⏭️  Skip existing: ${skipExisting}`);
 
     // 1. Fetch all flags with proper pagination/throttling
-    const allFlags = await getAllFeatureFlagsWithThrottling(apiKey, projectKey);
+    const allFlags = await getAllFeatureFlags(apiKey, projectKey);
 
     // 2. Filter flags that need expiry dates
     const { flagsToProcess, flagsSkipped } = filterFlagsNeedingExpiry(allFlags, customPropertyName, skipExisting);
@@ -228,9 +241,9 @@ async function run() {
 }
 
 /**
- * Fetch all feature flags from LaunchDarkly API with throttling and progress tracking
+ * Fetch all feature flags from LaunchDarkly API with pagination support
  */
-async function getAllFeatureFlagsWithThrottling(apiKey, projectKey) {
+async function getAllFeatureFlags(apiKey, projectKey) {
   const flags = [];
   let offset = 0;
   const limit = 50; // LaunchDarkly API default
@@ -241,11 +254,6 @@ async function getAllFeatureFlagsWithThrottling(apiKey, projectKey) {
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      // Add delay between requests (except first) to prevent rate limiting
-      if (offset > 0) {
-        await sleep(RATE_LIMIT_DELAY);
-      }
-
       const url = `https://app.launchdarkly.com/api/v2/flags/${projectKey}?limit=${limit}&offset=${offset}`;
       
       core.debug(`Fetching flags: offset=${offset}, limit=${limit}`);
@@ -321,7 +329,8 @@ async function getFeatureFlag(apiKey, projectKey, flagKey) {
 async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, propertyValue) {
   const url = `https://app.launchdarkly.com/api/v2/flags/${projectKey}/${flagKey}`;
   
-  // Prepare the semantic patch operation to add/update the custom property
+  // Prepare the semantic patch operation to add custom property
+  // Using LaunchDarkly's semantic patch format with instructions
   const patchData = {
     instructions: [
       {
@@ -658,7 +667,7 @@ if (require.main === module) {
 
 module.exports = { 
   run, 
-  getAllFeatureFlagsWithThrottling,
+  getAllFeatureFlags,
   getFeatureFlag, 
   setCustomProperty, 
   getTodaysDate, 

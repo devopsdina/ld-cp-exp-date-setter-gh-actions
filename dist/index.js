@@ -335,19 +335,17 @@ async function getFeatureFlag(apiKey, projectKey, flagKey) {
 async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, propertyValue) {
   const url = `https://app.launchdarkly.com/api/v2/flags/${projectKey}/${flagKey}`;
   
-  // Prepare the patch operation with semantic instructions
-  // Using LaunchDarkly's patch format with instructions inside
+  // Prepare the JSON patch operation to set the custom property
+  // Using standard JSON patch format with correct "values" field
   const patchData = {
     patch: [
       {
-        instructions: [
-          {
-            kind: 'addCustomProperties',
-            key: propertyName,
-            name: propertyName,
-            values: [propertyValue]
-          }
-        ]
+        op: 'add',
+        path: `/customProperties/${propertyName}`,
+        value: {
+          name: propertyName,
+          values: [propertyValue]  // Note: "values" not "value"
+        }
       }
     ]
   };

@@ -1,11 +1,9 @@
 const core = require('@actions/core');
 
 // Rate limiting and retry constants
-const RATE_LIMIT_DELAY = 1500; // milliseconds between requests (increased to 1.5s)
+const RATE_LIMIT_DELAY = 3000; // milliseconds between requests (increased to 3s to avoid rate limiting)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 second base delay for retries
-const BATCH_SIZE = 5; // Process 5 flags at a time (not used in sequential processing)
-const BATCH_DELAY = 2000; // 2 second delay between batches (not used in sequential processing)
 
 /**
  * Sleep utility function

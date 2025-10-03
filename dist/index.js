@@ -65,7 +65,16 @@ async function fetchWithRetry(url, options, maxRetries = MAX_RETRIES) {
     }
   }
   
-  throw lastError;
+  // Ensure we always throw a proper Error object
+  if (lastError instanceof Error) {
+    throw lastError;
+  } else if (typeof lastError === 'string') {
+    throw new Error(lastError);
+  } else if (lastError && lastError.message) {
+    throw new Error(lastError.message);
+  } else {
+    throw new Error('Request failed after maximum retries');
+  }
 }
 
 /**
@@ -318,21 +327,21 @@ async function getFeatureFlag(apiKey, projectKey, flagKey) {
 async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, propertyValue) {
   const url = `https://app.launchdarkly.com/api/v2/flags/${projectKey}/${flagKey}`;
   
-  // Prepare the patch operation to set the custom property
+  // Prepare the semantic patch operation to add/update the custom property
   const patchData = {
-    patch: [
+    instructions: [
       {
-        op: 'replace',
-        path: `/customProperties/${propertyName}`,
-        value: {
-          name: propertyName,
-          value: [propertyValue]
-        }
+        kind: 'addCustomProperties',
+        key: propertyName,
+        name: propertyName,
+        values: [propertyValue]
       }
     ]
   };
 
   core.debug(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey}`);
+  core.debug(`Request URL: ${url}`);
+  core.debug(`Request body: ${JSON.stringify(patchData)}`);
   
   try {
     const response = await fetchWithRetry(url, {
@@ -346,14 +355,26 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
 
     return await response.json();
   } catch (error) {
-    // Add more context to the error
-    if (error.message.includes('HTTP 401')) {
-      throw new Error(`${error.message} Please check your API key has WRITE permissions.`);
-    } else if (error.message.includes('HTTP 404')) {
-      throw new Error(`${error.message} Flag '${flagKey}' may not exist in project '${projectKey}'.`);
+    // Safely extract error message
+    let errorMessage;
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && error.message) {
+      errorMessage = error.message;
+    } else {
+      errorMessage = `Unknown error occurred while setting custom property on flag ${flagKey}`;
     }
     
-    throw error;
+    // Add more context to the error
+    if (errorMessage.includes('HTTP 401')) {
+      throw new Error(`${errorMessage} Please check your API key has WRITE permissions.`);
+    } else if (errorMessage.includes('HTTP 404')) {
+      throw new Error(`${errorMessage} Flag '${flagKey}' may not exist in project '${projectKey}'.`);
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 

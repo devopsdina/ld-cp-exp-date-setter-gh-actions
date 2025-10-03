@@ -326,15 +326,18 @@ async function getFeatureFlag(apiKey, projectKey, flagKey) {
 /**
  * Set a custom property on a feature flag
  */
-async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, propertyValue) {
+async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, propertyValue, hasExistingProperty = false) {
   const url = `https://app.launchdarkly.com/api/v2/flags/${projectKey}/${flagKey}`;
+  
+  // Use 'replace' if property exists, 'add' if it doesn't
+  const operation = hasExistingProperty ? 'replace' : 'add';
   
   // Prepare the JSON patch operation to set the custom property
   // Using standard JSON patch format with correct "values" field
   const patchData = {
     patch: [
       {
-        op: 'add',
+        op: operation,
         path: `/customProperties/${propertyName}`,
         value: {
           name: propertyName,
@@ -344,7 +347,7 @@ async function setCustomProperty(apiKey, projectKey, flagKey, propertyName, prop
     ]
   };
 
-  core.debug(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey}`);
+  core.debug(`Setting custom property ${propertyName} = ${propertyValue} on flag: ${flagKey} (operation: ${operation})`);
   core.debug(`Request URL: ${url}`);
   core.debug(`Request body: ${JSON.stringify(patchData)}`);
   
@@ -478,8 +481,14 @@ async function processSingleFlag(flag, apiKey, projectKey, customPropertyName, d
     const expiryDateString = calculateExpiryFromCreation(flag, daysFromCreation, dateFormat);
     const creationDate = new Date(flag.creationDate);
     
-    // Set the custom property
-    await setCustomProperty(apiKey, projectKey, flag.key, customPropertyName, expiryDateString);
+    // Check if the custom property already exists
+    const hasExistingProperty = flag.customProperties && 
+                               flag.customProperties[customPropertyName] &&
+                               flag.customProperties[customPropertyName].value &&
+                               flag.customProperties[customPropertyName].value.length > 0;
+    
+    // Set the custom property (with appropriate operation)
+    await setCustomProperty(apiKey, projectKey, flag.key, customPropertyName, expiryDateString, hasExistingProperty);
     
     return {
       key: flag.key,
@@ -506,7 +515,7 @@ async function processSingleFlag(flag, apiKey, projectKey, customPropertyName, d
 }
 
 /**
- * Process flags in batches to avoid overwhelming the API
+ * Process flags sequentially to avoid rate limiting
  */
 async function processFlagsInBatches(flagsToProcess, apiKey, projectKey, customPropertyName, daysFromCreation, dateFormat) {
   const results = {
@@ -520,60 +529,42 @@ async function processFlagsInBatches(flagsToProcess, apiKey, projectKey, customP
     return results;
   }
   
-  // Split flags into batches
-  const batches = [];
-  for (let i = 0; i < flagsToProcess.length; i += BATCH_SIZE) {
-    batches.push(flagsToProcess.slice(i, i + BATCH_SIZE));
-  }
+  core.info(`🚀 Processing ${flagsToProcess.length} flags sequentially`);
   
-  core.info(`🚀 Processing ${flagsToProcess.length} flags in ${batches.length} batches of ${BATCH_SIZE}`);
-  
-  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-    const batch = batches[batchIndex];
+  for (let i = 0; i < flagsToProcess.length; i++) {
+    const flag = flagsToProcess[i];
+    results.totalProcessed++;
     
-    core.info(`📦 Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} flags)`);
+    core.info(`📦 Processing flag ${i + 1}/${flagsToProcess.length}: ${flag.key}`);
     
-    // Process batch in parallel
-    const batchPromises = batch.map(flag => 
-      processSingleFlag(flag, apiKey, projectKey, customPropertyName, daysFromCreation, dateFormat)
-    );
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    // Collect results
-    batchResults.forEach((result, index) => {
-      const flag = batch[index];
-      results.totalProcessed++;
-      
-      if (result.status === 'fulfilled') {
-        results.updatedFlags.push(result.value);
-        core.info(`  ✅ ${flag.key}: ${result.value.calculatedExpiryDate}`);
+    try {
+      const result = await processSingleFlag(flag, apiKey, projectKey, customPropertyName, daysFromCreation, dateFormat);
+      results.updatedFlags.push(result);
+      core.info(`  ✅ ${flag.key}: ${result.calculatedExpiryDate}`);
+    } catch (error) {
+      // Better error handling - extract message safely
+      let errorMessage;
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && error.message) {
+        errorMessage = error.message;
       } else {
-        // Better error handling - extract message safely
-        let errorMessage;
-        if (result.reason instanceof Error) {
-          errorMessage = result.reason.message;
-        } else if (typeof result.reason === 'string') {
-          errorMessage = result.reason;
-        } else if (result.reason && result.reason.message) {
-          errorMessage = result.reason.message;
-        } else {
-          errorMessage = 'Unknown error occurred';
-        }
-        
-        results.failedFlags.push({
-          key: flag.key,
-          name: flag.name,
-          error: errorMessage
-        });
-        core.error(`  ❌ ${flag.key}: ${errorMessage}`);
+        errorMessage = 'Unknown error occurred';
       }
-    });
+      
+      results.failedFlags.push({
+        key: flag.key,
+        name: flag.name,
+        error: errorMessage
+      });
+      core.error(`  ❌ ${flag.key}: ${errorMessage}`);
+    }
     
-    // Delay between batches (except last) to be respectful of rate limits
-    if (batchIndex < batches.length - 1) {
-      core.debug(`Waiting ${BATCH_DELAY}ms before next batch...`);
-      await sleep(BATCH_DELAY);
+    // Add delay between each flag to respect rate limits
+    if (i < flagsToProcess.length - 1) {
+      await sleep(RATE_LIMIT_DELAY);
     }
   }
   

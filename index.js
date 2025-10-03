@@ -1,11 +1,11 @@
 const core = require('@actions/core');
 
 // Rate limiting and retry constants
-const RATE_LIMIT_DELAY = 500; // milliseconds between requests (increased from 100ms)
+const RATE_LIMIT_DELAY = 1500; // milliseconds between requests (increased to 1.5s)
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 second base delay for retries (increased from 1s)
-const BATCH_SIZE = 5; // Process 5 flags at a time (reduced from 10)
-const BATCH_DELAY = 2000; // 2 second delay between batches (increased from 500ms)
+const RETRY_DELAY = 2000; // 2 second base delay for retries
+const BATCH_SIZE = 5; // Process 5 flags at a time (not used in sequential processing)
+const BATCH_DELAY = 2000; // 2 second delay between batches (not used in sequential processing)
 
 /**
  * Sleep utility function
@@ -114,12 +114,12 @@ async function run() {
       throw new Error(`Invalid days_from_creation value: ${daysFromCreationInput}. Must be a number between 1 and 365`);
     }
 
-    core.info(`🚀 Starting LaunchDarkly Flag Expiry Setter`);
-    core.info(`📋 Project: ${projectKey}`);
-    core.info(`📅 Days from creation: ${daysFromCreation}`);
-    core.info(`🏷️  Custom property: ${customPropertyName}`);
-    core.info(`📊 Date format: ${dateFormat}`);
-    core.info(`⏭️  Skip existing: ${skipExisting}`);
+    core.info(`Starting LaunchDarkly Flag Expiry Setter`);
+    core.info(`Project: ${projectKey}`);
+    core.info(`Days from creation: ${daysFromCreation}`);
+    core.info(`Custom property: ${customPropertyName}`);
+    core.info(`Date format: ${dateFormat}`);
+    core.info(`Skip existing: ${skipExisting}`);
 
     // 1. Fetch all flags with proper pagination/throttling
     const allFlags = await getAllFeatureFlags(apiKey, projectKey);
@@ -146,16 +146,16 @@ async function run() {
     }
 
     // 4. Output comprehensive results
-    core.info(`\n📊 Final Summary:`);
-    core.info(`🔍 Total flags found: ${allFlags.length}`);
-    core.info(`⏭️  Flags skipped: ${flagsSkipped.length}`);
-    core.info(`✅ Successfully updated: ${results.updatedFlags.length}`);
-    core.info(`❌ Failed to update: ${results.failedFlags.length}`);
-    core.info(`📋 Total processed: ${results.totalProcessed}`);
+    core.info(`\nFinal Summary:`);
+    core.info(`Total flags found: ${allFlags.length}`);
+    core.info(`Flags skipped: ${flagsSkipped.length}`);
+    core.info(`Successfully updated: ${results.updatedFlags.length}`);
+    core.info(`Failed to update: ${results.failedFlags.length}`);
+    core.info(`Total processed: ${results.totalProcessed}`);
 
     // Log skipped flags summary
     if (flagsSkipped.length > 0) {
-      core.info(`\n⏭️  Skipped flags breakdown:`);
+      core.info(`\nSkipped flags breakdown:`);
       const skipReasons = {};
       flagsSkipped.forEach(flag => {
         const reason = flag.reason.includes('Already has') ? 'Already has expiry' : flag.reason;
@@ -249,7 +249,7 @@ async function getAllFeatureFlags(apiKey, projectKey) {
   const limit = 50; // LaunchDarkly API default
   let totalCount = null;
 
-  core.info('🔍 Fetching all feature flags from LaunchDarkly...');
+  core.info('Fetching all feature flags from LaunchDarkly...');
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -269,7 +269,7 @@ async function getAllFeatureFlags(apiKey, projectKey) {
       // Track progress for large datasets
       if (totalCount === null && data.totalCount) {
         totalCount = data.totalCount;
-        core.info(`📊 Found ${totalCount} total flags to process`);
+        core.info(`Found ${totalCount} total flags to process`);
       }
       
       if (data.items && data.items.length > 0) {
@@ -278,7 +278,7 @@ async function getAllFeatureFlags(apiKey, projectKey) {
         
         // Progress logging
         const progress = totalCount ? `${flags.length}/${totalCount}` : flags.length;
-        core.info(`📋 Retrieved ${progress} flags`);
+        core.info(`Retrieved ${progress} flags`);
         
         // If we got fewer items than the limit, we've reached the end
         if (data.items.length < limit) {
@@ -294,7 +294,7 @@ async function getAllFeatureFlags(apiKey, projectKey) {
     }
   }
 
-  core.info(`✅ Successfully retrieved ${flags.length} total flags`);
+    core.info(`Successfully retrieved ${flags.length} total flags`);
   return flags;
 }
 
@@ -435,7 +435,7 @@ function filterFlagsNeedingExpiry(flags, customPropertyName, skipExisting) {
   const flagsToProcess = [];
   const flagsSkipped = [];
   
-  core.info(`🔍 Filtering flags that need expiry dates...`);
+  core.info(`Filtering flags that need expiry dates...`);
   
   for (const flag of flags) {
     // Check if flag already has the custom property
@@ -468,7 +468,7 @@ function filterFlagsNeedingExpiry(flags, customPropertyName, skipExisting) {
     flagsToProcess.push(flag);
   }
   
-  core.info(`📊 Filtering complete: ${flagsToProcess.length} to process, ${flagsSkipped.length} skipped`);
+  core.info(`Filtering complete: ${flagsToProcess.length} to process, ${flagsSkipped.length} skipped`);
   return { flagsToProcess, flagsSkipped };
 }
 
@@ -525,17 +525,17 @@ async function processFlagsInBatches(flagsToProcess, apiKey, projectKey, customP
   };
   
   if (flagsToProcess.length === 0) {
-    core.info('📋 No flags to process');
+    core.info('No flags to process');
     return results;
   }
   
-  core.info(`🚀 Processing ${flagsToProcess.length} flags sequentially`);
+  core.info(`Processing ${flagsToProcess.length} flags sequentially`);
   
   for (let i = 0; i < flagsToProcess.length; i++) {
     const flag = flagsToProcess[i];
     results.totalProcessed++;
     
-    core.info(`📦 Processing flag ${i + 1}/${flagsToProcess.length}: ${flag.key}`);
+    core.info(`Processing flag ${i + 1}/${flagsToProcess.length}: ${flag.key}`);
     
     try {
       const result = await processSingleFlag(flag, apiKey, projectKey, customPropertyName, daysFromCreation, dateFormat);
